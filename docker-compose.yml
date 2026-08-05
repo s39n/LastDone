@@ -1,0 +1,40 @@
+# Last Done — deploy file for a GIT-BASED stack (Dockhand, Dockge, Portainer git, …).
+#
+# Point your deployer at THIS file (repo root). The build context is the repo
+# root (".") with the Dockerfile at server/Dockerfile, so there is no ".." to
+# misresolve — the frontend is built and bundled with the API into one image
+# that serves both the app and /push at the same origin.
+#
+# Configuration comes from your deployer's environment-variable editor (or a
+# .env file placed next to this compose). Nothing here requires a file that
+# isn't in the repo, so a fresh checkout builds as-is.
+
+services:
+  push:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    # Or deploy a prebuilt image instead of building — set IMAGE and drop build:
+    # image: ${IMAGE:-ghcr.io/s39n/lastdone-push:latest}
+    container_name: ${CONTAINER_NAME:-lastdone-push}
+    restart: unless-stopped
+    # Host networking avoids Docker "address pool" exhaustion and binds the app
+    # directly on PUSH_PORT. Comment this out (and add a ports: mapping) for bridge.
+    network_mode: host
+    environment:
+      PORT: ${PUSH_PORT:-4000}
+      VAPID_CONTACT: ${VAPID_CONTACT:-mailto:you@example.com}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      CRON: ${CRON:-*/15 * * * *}
+      RENOTIFY_HOURS: ${RENOTIFY_HOURS:-20}
+    volumes:
+      # Persist subscriptions + the VAPID keypair. Point DATA_PATH at your NAS,
+      # e.g. DATA_PATH=/volume1/docker/lastdone/data (Synology).
+      - ${DATA_PATH:-./data}:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${PORT:-4000}/push/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

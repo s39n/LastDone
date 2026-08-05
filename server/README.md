@@ -12,6 +12,13 @@ The push layer is phase 2; the app works fully offline without it (local reminde
 
 Subscriptions live in `data/db.json`; the VAPID keypair in `data/vapid.json` (auto-generated on first run unless you supply your own).
 
+## Which compose file?
+
+- **[`../docker-compose.yml`](../docker-compose.yml) (repo root)** — use this for git-based deployers like **Dockhand**. Build context is the repo root (`context: .`), so a fresh checkout builds without any `..` path surprises. Config comes from the deployer's env editor.
+- **`server/docker-compose.yml` (this dir)** — convenience for running locally from inside `server/` with an `.env` file (build context is `..`). Only works when the full repo is checked out around it.
+
+If Dockhand shows `lstat …/server: no such file or directory`, it's pointed at `server/docker-compose.yml` (whose `..` context escapes the stack dir). Point it at the **root** `docker-compose.yml` instead.
+
 ## Run with Docker
 
 ```bash

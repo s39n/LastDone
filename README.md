@@ -50,15 +50,24 @@ npm run preview  # serve the production build
 
 ### Self-host with Docker (app + push in one container)
 
-The container in [`server/`](./server) builds this frontend and serves it alongside the push API at the same origin — one service hosts everything:
+One image builds this frontend and serves it alongside the push API at the same origin. Use the **repo-root [`docker-compose.yml`](./docker-compose.yml)** — its build context is the repo root, so a plain git checkout builds as-is.
+
+Manual / local:
 
 ```bash
-cd server
-cp .env.example .env      # set VAPID_CONTACT, PUSH_PORT, DATA_PATH
-docker compose up -d --build
+docker compose up -d --build      # from the repo root
 ```
 
-Then open `http://<host>:${PUSH_PORT}`. See [`server/README.md`](./server/README.md) for NAS storage, ports, and Dockhand.
+Then open `http://<host>:${PUSH_PORT}` (default 4000).
+
+Deploy via Dockhand (git-based stack):
+
+1. Create the stack from a **Git repository** source pointing at this repo. It's private, so add a GitHub token (a read-only fine-grained PAT or deploy key) in Dockhand.
+2. Set the **compose path** to `docker-compose.yml` (repo root — not `server/`).
+3. In the stack's environment editor set at least `DATA_PATH` (a folder on your NAS) and `VAPID_CONTACT`; optionally `PUSH_PORT`.
+4. Deploy. A push to `main` triggers Dockhand's redeploy; because `DATA_PATH` lives on the NAS, subscriptions and the VAPID keypair survive rebuilds.
+
+See [`server/README.md`](./server/README.md) for the full env-var list, NAS/NFS storage, ports, and troubleshooting.
 
 ## Project structure
 
