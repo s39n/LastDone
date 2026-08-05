@@ -1,6 +1,8 @@
-# Last Done — push backend
+# Last Done — server (web app + push backend)
 
-A tiny self-hosted [Web Push](https://developer.mozilla.org/en-US/docs/Web/API/Push_API) server that sends **overdue reminders even when the app is closed**. This is phase 2 of Last Done; the app works fully offline without it (local reminders only).
+A single self-hosted container that serves the **Last Done web app** *and* a [Web Push](https://developer.mozilla.org/en-US/docs/Web/API/Push_API) backend for **overdue reminders even when the app is closed**. The Docker image builds the PWA and bundles it in, so one service hosts everything at the same origin — the app's `/push` calls just work, no URL config.
+
+The push layer is phase 2; the app works fully offline without it (local reminders only).
 
 ## How it works
 
@@ -60,16 +62,22 @@ cp .env.example .env
 npm start
 ```
 
-## Point the app at it
+## Opening the app
 
-Build the frontend with the backend URL:
+Once the container is up, just open **`http://<host>:${PUSH_PORT}`** — the container serves the built PWA at the root and the API under `/push` at the same origin, so nothing to configure. Client-side routes fall back to the app shell; the service worker and app shell are sent with `Cache-Control: no-cache` so redeploys are picked up.
+
+The image is a multi-stage build (`server/Dockerfile`): stage 1 runs `npm ci && npm run build` for the frontend, stage 2 copies `dist/` into the API image's `public/`. Because of this, the Compose `build.context` is the **repo root** (not `server/`).
+
+### Hosting the app elsewhere (optional)
+
+If you'd rather serve the frontend separately (CDN, another host) and use this container as API-only, build the frontend pointing at this server and deploy `dist/` yourself:
 
 ```bash
 # from the project root
 VITE_PUSH_URL=https://push.yourdomain.com/push npm run build
 ```
 
-If the server is same-origin (reverse-proxied under `/push`), you can skip `VITE_PUSH_URL` — the app defaults to `/push`.
+The bundled copy still serves as a fallback; the app defaults to same-origin `/push` when `VITE_PUSH_URL` is unset.
 
 ## Endpoints
 

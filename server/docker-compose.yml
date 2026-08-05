@@ -10,8 +10,13 @@
 
 services:
   push:
-    build: .
-    # To deploy a prebuilt image instead of building, comment out `build: .`
+    # Build context is the repo root so the image can build the frontend too;
+    # the Dockerfile bundles the built PWA into the API container (one service
+    # serves both the app and /push).
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    # To deploy a prebuilt image instead of building, comment out `build:` above
     # and set IMAGE in .env:
     # image: ${IMAGE:-lastdone-push:latest}
     container_name: ${CONTAINER_NAME:-lastdone-push}

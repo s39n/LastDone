@@ -2,7 +2,12 @@ import express from 'express'
 import cors from 'cors'
 import cron from 'node-cron'
 import webpush from 'web-push'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { store, loadOrCreateVapid } from './store.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const PORT = process.env.PORT || 4000
 const CONTACT = process.env.VAPID_CONTACT || 'mailto:hello@example.com'
@@ -92,7 +97,23 @@ const CRON = process.env.CRON || '*/15 * * * *'
 cron.schedule(CRON, () => { sweep().catch(e => console.warn('sweep error', e)) })
 console.log(`[push] overdue sweep scheduled: ${CRON}`)
 
-app.get('/', (_req, res) => res.type('text').send('Last Done push server. API under /push'))
+// Serve the built PWA (same origin as the API, so the app's default '/push' works).
+const PUBLIC_DIR = process.env.PUBLIC_DIR || path.join(__dirname, 'public')
+if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
+  app.use(express.static(PUBLIC_DIR, { index: false, maxAge: '1h', setHeaders: (res, p) => {
+    // never cache the SW or the app shell — always pick up new deploys
+    if (p.endsWith('sw.js') || p.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache')
+  }}))
+  // SPA fallback for client routes (but never for the API).
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/push')) return next()
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'))
+  })
+  console.log(`[web] serving PWA from ${PUBLIC_DIR}`)
+} else {
+  app.get('/', (_req, res) => res.type('text').send('Last Done push server. API under /push (no web build bundled).'))
+  console.log('[web] no web build found — serving API only')
+}
 
 app.listen(PORT, () => console.log(`[push] listening on :${PORT}`))
 

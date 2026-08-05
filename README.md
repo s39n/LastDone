@@ -48,6 +48,18 @@ npm run build    # production build to dist/
 npm run preview  # serve the production build
 ```
 
+### Self-host with Docker (app + push in one container)
+
+The container in [`server/`](./server) builds this frontend and serves it alongside the push API at the same origin — one service hosts everything:
+
+```bash
+cd server
+cp .env.example .env      # set VAPID_CONTACT, PUSH_PORT, DATA_PATH
+docker compose up -d --build
+```
+
+Then open `http://<host>:${PUSH_PORT}`. See [`server/README.md`](./server/README.md) for NAS storage, ports, and Dockhand.
+
 ## Project structure
 
 ```
