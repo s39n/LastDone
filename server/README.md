@@ -13,11 +13,41 @@ Subscriptions live in `data/db.json`; the VAPID keypair in `data/vapid.json` (au
 ## Run with Docker
 
 ```bash
-cp .env.example .env      # edit VAPID_CONTACT
+cp .env.example .env      # edit VAPID_CONTACT, PUSH_PORT, DATA_PATH
 docker compose up -d --build
 ```
 
-Server is on `http://localhost:4000`, API under `/push`. Health check: `GET /push/health`.
+Server is on `http://<host>:${PUSH_PORT}` (default `4000`), API under `/push`. Health check: `GET /push/health` (Compose also runs this as a container healthcheck).
+
+### Choosing the port
+
+Set `PUSH_PORT` in `.env` to change how you reach the server — the compose file maps `${PUSH_PORT}:${CONTAINER_PORT}`:
+
+```env
+PUSH_PORT=8443        # reach it at http://<host>:8443
+CONTAINER_PORT=4000   # internal listen port; rarely needs changing
+```
+
+### Storing data on your NAS
+
+The `data/` folder holds the browser subscriptions (`db.json`) and the VAPID keypair (`vapid.json`). **Keep it on persistent storage** — if the VAPID keys are lost, every existing push subscription breaks. Point `DATA_PATH` at a folder on your NAS:
+
+```env
+DATA_PATH=/volume1/docker/lastdone/data   # Synology
+# DATA_PATH=/mnt/nas/lastdone/data        # generic Linux NFS/CIFS mount
+```
+
+Make sure the folder exists and is writable by the container (uid 1000 in `node:22-alpine`):
+
+```bash
+mkdir -p /volume1/docker/lastdone/data
+```
+
+If your NAS is a **separate host** reached over NFS, use the named-volume block at the bottom of `docker-compose.yml` instead of the bind mount, and set `NAS_ADDR` / `NAS_EXPORT_PATH` in `.env`.
+
+### Deploying with Dockhand
+
+This stack is a standard env-driven Compose file, so Dockhand can manage it directly: point Dockhand at `server/docker-compose.yml` in this repo. A `git push` to the repo triggers Dockhand's auto-redeploy — because `DATA_PATH` lives on the NAS (outside the container), subscriptions and VAPID keys survive every rebuild. To ship a prebuilt image rather than building on the host, comment out `build: .`, set `image: ${IMAGE}` (already stubbed in the compose file), and define `IMAGE` in `.env`.
 
 ## Run without Docker
 
@@ -51,7 +81,21 @@ If the server is same-origin (reverse-proxied under `/push`), you can skip `VITE
 
 ## Config (env)
 
-See `.env.example`. Keys: `PORT`, `VAPID_CONTACT`, `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`, `CRON`, `RENOTIFY_HOURS`.
+See `.env.example` for the full list with comments.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PUSH_PORT` | `4000` | Host port you reach the server on |
+| `CONTAINER_PORT` | `4000` | Port the app listens on inside the container |
+| `DATA_PATH` | `./data` | Host path for `data/` — point at your NAS |
+| `CONTAINER_NAME` | `lastdone-push` | Container name |
+| `VAPID_CONTACT` | — | Contact email in push headers |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | auto | Bring your own keys (else generated once into `data/`) |
+| `CRON` | `*/15 * * * *` | Overdue sweep frequency |
+| `RENOTIFY_HOURS` | `20` | Min hours between repeat nudges for the same chore |
+| `NAS_ADDR` / `NAS_EXPORT_PATH` | — | Only for the NFS named-volume option |
+
+`PORT` (the raw listen port) is set for you by Compose from `CONTAINER_PORT`; when running without Docker, set `PORT` directly.
 
 ## Note on HTTPS
 

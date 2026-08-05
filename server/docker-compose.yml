@@ -1,11 +1,45 @@
+# Last Done — push backend.
+# Everything configurable lives in .env (copy from .env.example).
+# Deploy with `docker compose up -d --build`, or point Dockhand at this file
+# (a git push to the repo triggers Dockhand's auto-redeploy).
+
 services:
   push:
     build: .
-    container_name: lastdone-push
+    # To deploy a prebuilt image instead of building (e.g. from a registry),
+    # comment out `build: .` above and set IMAGE in .env:
+    # image: ${IMAGE:-lastdone-push:latest}
+    container_name: ${CONTAINER_NAME:-lastdone-push}
     restart: unless-stopped
-    ports:
-      - "4000:4000"
     env_file:
       - .env
+    environment:
+      # The port the app listens on *inside* the container.
+      PORT: ${CONTAINER_PORT:-4000}
+    ports:
+      # HOST_PORT:CONTAINER_PORT  — set PUSH_PORT to change how you reach it.
+      - "${PUSH_PORT:-4000}:${CONTAINER_PORT:-4000}"
     volumes:
-      - ./data:/app/data
+      # Persist subscriptions + the VAPID keypair. Point DATA_PATH at your NAS.
+      # e.g. DATA_PATH=/volume1/docker/lastdone/data  (Synology)
+      #      DATA_PATH=/mnt/nas/lastdone/data         (generic Linux mount)
+      - ${DATA_PATH:-./data}:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${PORT:-4000}/push/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+# --- Alternative: mount a REMOTE NAS over NFS as a named volume ---------------
+# Use this instead of the bind mount above if the NAS is a separate host.
+# Uncomment the block below, and change the service volume to:
+#     - lastdone-data:/app/data
+#
+# volumes:
+#   lastdone-data:
+#     driver: local
+#     driver_opts:
+#       type: nfs
+#       o: "addr=${NAS_ADDR},rw,nfsvers=4"
+#       device: ":${NAS_EXPORT_PATH}"   # e.g. :/volume1/docker/lastdone/data
