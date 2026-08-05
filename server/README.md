@@ -19,14 +19,17 @@ docker compose up -d --build
 
 Server is on `http://<host>:${PUSH_PORT}` (default `4000`), API under `/push`. Health check: `GET /push/health` (Compose also runs this as a container healthcheck).
 
-### Choosing the port
+### Networking (host mode)
 
-Set `PUSH_PORT` in `.env` to change how you reach the server — the compose file maps `${PUSH_PORT}:${CONTAINER_PORT}`:
+The compose file uses `network_mode: host`: the container shares the host's network stack instead of getting its own Docker bridge network. This avoids the error `all predefined address pools have been fully subnetted`, which happens when Docker has run out of address space to create new networks. Host mode is Linux-only, which is fine for a NAS.
+
+Because there's no port mapping in host mode, the app binds **directly** to the host on `PUSH_PORT`:
 
 ```env
 PUSH_PORT=8443        # reach it at http://<host>:8443
-CONTAINER_PORT=4000   # internal listen port; rarely needs changing
 ```
+
+Make sure that port is free on the host. If you'd rather use isolated bridge networking (and remap the host port independently), see the commented "BRIDGE networking" block in `docker-compose.yml` — but only switch back once the address-pool issue is resolved (see Troubleshooting).
 
 ### Storing data on your NAS
 
@@ -97,6 +100,29 @@ See `.env.example` for the full list with comments.
 
 `PORT` (the raw listen port) is set for you by Compose from `CONTAINER_PORT`; when running without Docker, set `PORT` directly.
 
+## Troubleshooting
+
+**`all predefined address pools have been fully subnetted`** — Docker can't create another network because it has exhausted its address pools (usually from many leftover Compose/stack networks). The shipped compose already sidesteps this with `network_mode: host`. If you instead want bridge networking, reclaim pools first:
+
+```bash
+docker network prune              # remove unused networks
+docker network ls                 # see what's left
+```
+
+If you legitimately run many stacks, widen Docker's pools in `/etc/docker/daemon.json` and restart Docker:
+
+```json
+{
+  "default-address-pools": [
+    { "base": "10.200.0.0/16", "size": 24 }
+  ]
+}
+```
+
+**Port already in use** — in host mode the app binds `PUSH_PORT` directly; pick a free port or stop whatever holds it (`ss -ltnp | grep :4000`).
+
+**`data/` not writable** — the container runs as uid 1000; `chown -R 1000:1000 <DATA_PATH>` (or make it group-writable) on the NAS.
+
 ## Note on HTTPS
 
-Web Push requires the app to be served over HTTPS (localhost is exempt for dev). Put this behind a TLS-terminating reverse proxy in production.
+Web Push requires the app to be served over HTTPS (localhost is exempt for dev). Put this behind a TLS-terminating reverse proxy in production. Note that with `network_mode: host` the container is reachable on every host interface — front it with your reverse proxy / firewall accordingly.

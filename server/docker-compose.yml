@@ -1,28 +1,31 @@
 # Last Done — push backend.
 # Everything configurable lives in .env (copy from .env.example).
-# Deploy with `docker compose up -d --build`, or point Dockhand at this file
-# (a git push to the repo triggers Dockhand's auto-redeploy).
+# Deploy with `docker compose up -d --build`, or point Dockhand at this file.
+#
+# Uses HOST networking: the container shares the host's network stack, so it
+# binds directly to the host on PUSH_PORT with no Docker bridge network created.
+# This avoids "all predefined address pools have been fully subnetted" errors
+# that happen when Docker has run out of network address pools. Host mode is
+# Linux-only (fine for a NAS).
 
 services:
   push:
     build: .
-    # To deploy a prebuilt image instead of building (e.g. from a registry),
-    # comment out `build: .` above and set IMAGE in .env:
+    # To deploy a prebuilt image instead of building, comment out `build: .`
+    # and set IMAGE in .env:
     # image: ${IMAGE:-lastdone-push:latest}
     container_name: ${CONTAINER_NAME:-lastdone-push}
     restart: unless-stopped
+    network_mode: host
     env_file:
       - .env
     environment:
-      # The port the app listens on *inside* the container.
-      PORT: ${CONTAINER_PORT:-4000}
-    ports:
-      # HOST_PORT:CONTAINER_PORT  — set PUSH_PORT to change how you reach it.
-      - "${PUSH_PORT:-4000}:${CONTAINER_PORT:-4000}"
+      # In host mode there's no port mapping — the app listens on this port
+      # directly on the host. Reach it at http://<host>:${PUSH_PORT}
+      PORT: ${PUSH_PORT:-4000}
     volumes:
       # Persist subscriptions + the VAPID keypair. Point DATA_PATH at your NAS.
       # e.g. DATA_PATH=/volume1/docker/lastdone/data  (Synology)
-      #      DATA_PATH=/mnt/nas/lastdone/data         (generic Linux mount)
       - ${DATA_PATH:-./data}:/app/data
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${PORT:-4000}/push/health || exit 1"]
@@ -31,10 +34,21 @@ services:
       retries: 3
       start_period: 10s
 
-# --- Alternative: mount a REMOTE NAS over NFS as a named volume ---------------
-# Use this instead of the bind mount above if the NAS is a separate host.
-# Uncomment the block below, and change the service volume to:
-#     - lastdone-data:/app/data
+# ─── Alternative: BRIDGE networking (default Docker) ──────────────────────────
+# Prefer this if you are NOT hitting address-pool exhaustion — it isolates the
+# container and lets you remap the host port independently of the listen port.
+# Replace the `network_mode`, `environment`, and (add) `ports` keys above with:
+#
+#     environment:
+#       PORT: ${CONTAINER_PORT:-4000}
+#     ports:
+#       - "${PUSH_PORT:-4000}:${CONTAINER_PORT:-4000}"
+#
+# (and delete the `network_mode: host` line).
+
+# ─── Alternative: REMOTE NAS over NFS as a named volume ───────────────────────
+# If the NAS is a separate host, use a named volume instead of the bind mount.
+# Change the service volume to `- lastdone-data:/app/data` and uncomment:
 #
 # volumes:
 #   lastdone-data:
