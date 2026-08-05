@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light dark; }
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Hide scrollbars but keep scroll */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(0.92); } 100% { transform: scale(1); } }
+.animate-pop { animation: pop 0.28s ease; }
+
+@keyframes fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fadeup { animation: fadeup 0.2s ease both; }
+
+@keyframes sheetup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.animate-sheet { animation: sheetup 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
