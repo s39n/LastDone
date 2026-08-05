@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useReducer, useSt
 import { uid } from './uid.js'
 import { seedData } from './seed.js'
 
-const KEY = 'lastdone.v2'
+const KEY = 'lastdone.v3'
 
 // ---- persistence (localStorage now; async-shaped so IndexedDB/cloud can drop in later) ----
 const persistence = {

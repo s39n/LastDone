@@ -22,11 +22,14 @@ A clean-room web re-imagining of the lastGLANCE concept, built with React + Vite
 
 ## Notifications — how they work
 
-This is an **offline-first** build (phase 1). Notifications use the browser's Notifications API and fire while the app is open or recently backgrounded. You get one daily summary of overdue chores after a time you choose.
+Two layers, both wired up:
 
-**Phase 2 (planned):** true background push — reminders that fire even when the app has been closed for days — requires a small push backend (Web Push + VAPID). The code is structured for this: `src/lib/notifications.js` already has a `registerForPush()` stub and a service worker is generated, so a backend can be added without reworking the UI.
+- **Local reminders (no server).** The browser's Notifications API fires a daily summary of overdue chores while the app is open or recently backgrounded. Enable it under Settings → Notifications.
+- **Background push (self-hosted server).** True reminders that fire even when the app has been closed for days. Toggle "Background push" in Settings; the app subscribes via Web Push, syncs a compact due-schedule to the backend in [`/server`](./server), and a cron sweep pushes overdue nudges. Tapping **Done** on the notification marks the chore complete in the app.
 
-Platform notes: Android Chrome and desktop browsers support web push well; iOS supports it only for PWAs added to the home screen (iOS 16.4+).
+The service worker (`src/sw.js`) handles both `push` and `notificationclick`. Platform notes: Android Chrome and desktop browsers support web push well; iOS supports it only for PWAs added to the home screen (iOS 16.4+).
+
+See [`server/README.md`](./server/README.md) to run the push backend (`docker compose up`).
 
 ## Tech
 
@@ -65,9 +68,13 @@ src/
     Sheet.jsx, Pickers.jsx
 ```
 
+## Design
+
+Editorial-minimal aesthetic (Linear/Vercel-leaning): near-monochrome canvas, a single indigo accent, Geist Sans for UI with Geist Mono for timestamps and figures, hairline borders over shadows, and Lucide line icons throughout. Chore urgency reads as a color state (green → amber → red) shown as a left edge and a monospaced label. Full light/dark support.
+
 ## Roadmap
 
-- [ ] Phase 2: Web Push backend for background overdue reminders
+- [x] Phase 2: Web Push backend for background overdue reminders
 - [ ] Optional end-to-end-encrypted cloud sync
 - [ ] Home-screen widgets / Quick Settings tiles (native wrapper)
 

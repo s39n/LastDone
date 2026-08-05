@@ -1,17 +1,17 @@
 import { uid } from './uid.js'
 import { DAY_MS } from './dates.js'
 
-// Demo data so the app is alive on first run. Cleared if the user resets.
+// Demo data so the app is alive on first run. Icons are Lucide keys (see icons.jsx).
 export function seedData() {
   const now = Date.now()
-  const me = { id: uid('p'), name: 'Me', color: '#3b82f6', emoji: '🙂' }
-  const partner = { id: uid('p'), name: 'Alex', color: '#ec4899', emoji: '😎' }
+  const me = { id: uid('p'), name: 'Me', color: '#5b5bd6', initials: 'ME' }
+  const partner = { id: uid('p'), name: 'Alex', color: '#ec4899', initials: 'AL' }
 
-  const cHome = { id: uid('c'), name: 'Home', icon: '🏠', color: '#3b82f6', parentId: null }
-  const cPlants = { id: uid('c'), name: 'Plants', icon: '🪴', color: '#22c55e', parentId: null }
-  const cPets = { id: uid('c'), name: 'Pets', icon: '🐾', color: '#f59e0b', parentId: null }
-  const cHealth = { id: uid('c'), name: 'Health', icon: '🩺', color: '#ec4899', parentId: null }
-  const cCar = { id: uid('c'), name: 'Car', icon: '🚗', color: '#64748b', parentId: null }
+  const cHome = { id: uid('c'), name: 'Home', icon: 'home', color: '#5b5bd6', parentId: null }
+  const cPlants = { id: uid('c'), name: 'Plants', icon: 'sprout', color: '#22c55e', parentId: null }
+  const cPets = { id: uid('c'), name: 'Pets', icon: 'paw', color: '#f59e0b', parentId: null }
+  const cHealth = { id: uid('c'), name: 'Health', icon: 'health', color: '#ec4899', parentId: null }
+  const cCar = { id: uid('c'), name: 'Car', icon: 'car', color: '#64748b', parentId: null }
 
   const categories = [cHome, cPlants, cPets, cHealth, cCar]
   const people = [me, partner]
@@ -23,30 +23,28 @@ export function seedData() {
   })
 
   const chores = [
-    mk('Water the plants', '💧', cPlants.id, 3, 4, me.id),
-    mk('Water the cactus', '🌵', cPlants.id, 21, 6, me.id),
-    mk('Fertilise plants', '🌿', cPlants.id, 30, 12, me.id),
-    mk('Change the sheets', '🛏️', cHome.id, 14, 10, partner.id),
-    mk('Clean the bathroom', '🚿', cHome.id, 7, 8, me.id),
-    mk('Vacuum', '🧹', cHome.id, 7, 2, partner.id),
-    mk('Take out recycling', '♻️', cHome.id, 7, 1, me.id),
-    mk('Clean the litter box', '🐈', cPets.id, 2, 1, me.id),
-    mk('Buy cat food', '🐟', cPets.id, 21, 15, partner.id),
-    mk('Walk the dog', '🐕', cPets.id, 1, 0, me.id),
-    mk('Dentist', '🦷', cHealth.id, 182, 120, me.id),
-    mk('Call Mom', '📞', cHealth.id, 7, 9, me.id),
-    mk('Refill prescription', '💊', cHealth.id, 30, 26, me.id),
-    mk('Change car oil', '🛢️', cCar.id, 182, 60, partner.id),
-    mk('Check tyre pressure', '🛞', cCar.id, 30, 40, me.id),
-    mk('Salt the driveway', '❄️', cHome.id, 3, 5, me.id, { season: { start: 11, end: 2 } }),
-    mk('Mow the lawn', '🌱', cHome.id, 10, 7, partner.id, { season: { start: 4, end: 10 } })
+    mk('Water the plants', 'droplets', cPlants.id, 3, 4, me.id),
+    mk('Water the cactus', 'flower', cPlants.id, 21, 6, me.id),
+    mk('Fertilise plants', 'leaf', cPlants.id, 30, 12, me.id),
+    mk('Change the sheets', 'bed', cHome.id, 14, 10, partner.id),
+    mk('Clean the bathroom', 'shower', cHome.id, 7, 8, me.id),
+    mk('Vacuum', 'vacuum', cHome.id, 7, 2, partner.id),
+    mk('Take out recycling', 'recycle', cHome.id, 7, 1, me.id),
+    mk('Clean the litter box', 'cat', cPets.id, 2, 3, me.id),
+    mk('Buy cat food', 'fish', cPets.id, 21, 15, partner.id),
+    mk('Walk the dog', 'walk', cPets.id, 1, 0, me.id),
+    mk('Dentist', 'health', cHealth.id, 182, 120, me.id),
+    mk('Call Mom', 'phone', cHealth.id, 7, 9, me.id),
+    mk('Refill prescription', 'pill', cHealth.id, 30, 26, me.id),
+    mk('Change car oil', 'wrench', cCar.id, 182, 60, partner.id),
+    mk('Check tyre pressure', 'car', cCar.id, 30, 40, me.id),
+    mk('Salt the driveway', 'snow', cHome.id, 3, 5, me.id, { season: { start: 11, end: 2 } }),
+    mk('Mow the lawn', 'sprout', cHome.id, 10, 7, partner.id, { season: { start: 4, end: 10 } })
   ]
 
-  // Build completion history so cards have color + heatmap has data.
   const completions = []
   for (const ch of chores) {
     const cadence = ch.cadenceDays || 7
-    // a few past completions leading up to the last one
     let last = now - ch._seedAgoDays * DAY_MS
     completions.push({ id: uid('done'), choreId: ch.id, ts: last, note: '', personId: ch.personId })
     for (let k = 1; k <= 4; k++) {
@@ -57,8 +55,8 @@ export function seedData() {
   }
 
   return {
-    version: 2,
+    version: 3,
     people, categories, chores, completions,
-    settings: { theme: 'system', activePersonId: null, notificationsEnabled: false, reminderHour: 9, seededAt: now }
+    settings: { theme: 'system', activePersonId: null, notificationsEnabled: false, pushEnabled: false, reminderHour: 9, seededAt: now }
   }
 }

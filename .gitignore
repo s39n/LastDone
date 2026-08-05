@@ -5,5 +5,9 @@ dist-ssr/
 .DS_Store
 .env
 .env.*
+!*.env.example
 *.log
 .vite/
+dev-dist/
+server/node_modules/
+server/data/

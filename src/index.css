@@ -2,24 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light dark; }
+:root {
+  --canvas: #fbfbf9;
+  --surface: #ffffff;
+  --inset: #f4f4f1;
+  --ink: #16161a;
+  --muted: #6c6c74;
+  --faint: #9b9ba3;
+  --line: #e9e9e4;
+  --line-strong: #dcdcd5;
+  --accent: #5b5bd6;
+  --accent-soft: rgba(91, 91, 214, 0.10);
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #0a0a0c;
+  --surface: #131316;
+  --inset: #1b1b1f;
+  --ink: #ededf0;
+  --muted: #9a9aa3;
+  --faint: #64646d;
+  --line: #232327;
+  --line-strong: #33333a;
+  --accent: #8280ff;
+  --accent-soft: rgba(130, 128, 255, 0.14);
+  color-scheme: dark;
+}
 
 html, body, #root { height: 100%; }
 body {
   margin: 0;
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
 }
 
-/* Hide scrollbars but keep scroll */
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(0.92); } 100% { transform: scale(1); } }
-.animate-pop { animation: pop 0.28s ease; }
+@keyframes pop { 0% { transform: scale(1); } 45% { transform: scale(0.9); } 100% { transform: scale(1); } }
+.animate-pop { animation: pop 0.26s cubic-bezier(0.22,1,0.36,1); }
 
-@keyframes fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.animate-fadeup { animation: fadeup 0.2s ease both; }
+@keyframes fadeup { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fadeup { animation: fadeup 0.22s ease both; }
 
 @keyframes sheetup { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.animate-sheet { animation: sheetup 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.animate-sheet { animation: sheetup 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+
+@keyframes overlayin { from { opacity: 0; } to { opacity: 1; } }
+.animate-overlay { animation: overlayin 0.2s ease both; }
+
+::selection { background: var(--accent-soft); }

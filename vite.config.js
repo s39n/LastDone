@@ -6,14 +6,18 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
       manifest: {
-        name: 'Last Done Tracker',
+        name: 'Last Done',
         short_name: 'LastDone',
         description: 'See when you last did anything, and what’s due, at a glance.',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#0a0a0c',
+        background_color: '#0a0a0c',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -23,9 +27,8 @@ export default defineConfig({
           { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        cleanupOutdatedCaches: true
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}']
       },
       devOptions: { enabled: false }
     })

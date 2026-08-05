@@ -1,31 +1,34 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Search, Plus, ListChecks, Clock, BarChart3, Settings2, PartyPopper } from 'lucide-react'
 import { useStore } from './lib/store.jsx'
+import { Avatar } from './components/Pickers.jsx'
 import ChoreCard from './components/ChoreCard.jsx'
 import ChoreDetail from './components/ChoreDetail.jsx'
 import AddEditChore from './components/AddEditChore.jsx'
 import Stats from './components/Stats.jsx'
 import Settings from './components/Settings.jsx'
-import { STATE, stateOf, progress, colorFor, rgb } from './lib/dates.js'
+import { STATE, stateOf, progress, dueAt } from './lib/dates.js'
 import { maybeRemindOverdue } from './lib/notifications.js'
+import { syncSchedule } from './lib/push.js'
 
 const ORDER = { [STATE.OVERDUE]: 0, [STATE.DUE]: 1, [STATE.SOON]: 2, [STATE.FRESH]: 3, [STATE.UNTIMED]: 4, [STATE.DORMANT]: 5 }
 
 export default function App() {
   const { state, api, lastDoneMap, now } = useStore()
-  const [tab, setTab] = useState('home')     // home | due | stats | settings
+  const [tab, setTab] = useState('home')
   const [query, setQuery] = useState('')
   const [activeCat, setActiveCat] = useState(null)
   const [detail, setDetail] = useState(null)
   const [editing, setEditing] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
+  const didDeepLink = useRef(false)
 
-  // ---- theme ----
+  // theme
   useEffect(() => {
     const apply = () => {
       const t = state.settings.theme
       const dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
       document.documentElement.classList.toggle('dark', dark)
-      document.documentElement.style.background = dark ? '#0f172a' : '#f1f5f9'
     }
     apply()
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -33,77 +36,84 @@ export default function App() {
     return () => mq.removeEventListener('change', apply)
   }, [state.settings.theme])
 
-  // ---- active person filter ----
+  // deep link from a notification: ?done=<choreId> → complete it
+  useEffect(() => {
+    if (didDeepLink.current) return
+    didDeepLink.current = true
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('done')
+    if (id && state.chores.some(c => c.id === id)) {
+      api.complete(id)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, []) // eslint-disable-line
+
+  // complete-from-notification while the app is already open (SW postMessage)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMsg = (e) => { if (e.data?.type === 'COMPLETE_CHORE' && e.data.choreId) api.complete(e.data.choreId) }
+    navigator.serviceWorker.addEventListener('message', onMsg)
+    return () => navigator.serviceWorker.removeEventListener('message', onMsg)
+  }, [api])
+
   const activePerson = state.people.find(p => p.id === state.settings.activePersonId) || null
 
-  // ---- derived, sorted, filtered chores ----
   const decorated = useMemo(() => {
     return state.chores
       .filter(c => !c.archived)
       .filter(c => !activePerson || c.personId === activePerson.id)
       .filter(c => !activeCat || c.categoryId === activeCat)
       .filter(c => !query || c.name.toLowerCase().includes(query.toLowerCase()))
-      .map(c => {
-        const ld = lastDoneMap[c.id]
-        const st = stateOf(c, ld, now)
-        const p = progress(ld, c.cadenceDays, now)
-        return { chore: c, lastDone: ld, st, p }
-      })
+      .map(c => ({ chore: c, lastDone: lastDoneMap[c.id], st: stateOf(c, lastDoneMap[c.id], now), p: progress(lastDoneMap[c.id], c.cadenceDays, now) }))
       .sort((a, b) => (ORDER[a.st] - ORDER[b.st]) || ((b.p ?? -1) - (a.p ?? -1)) || a.chore.name.localeCompare(b.chore.name))
   }, [state.chores, activePerson, activeCat, query, lastDoneMap, now])
 
-  const overdueList = useMemo(
-    () => decorated.filter(d => d.st === STATE.OVERDUE || d.st === STATE.DUE)
-                   .map(d => ({ ...d.chore })),
-    [decorated]
-  )
+  const dueList = useMemo(() => decorated.filter(d => d.st === STATE.OVERDUE || d.st === STATE.DUE), [decorated])
 
-  // ---- fire overdue reminders (phase 1: local) ----
+  // local overdue reminders
   useEffect(() => {
     if (!state.settings.notificationsEnabled) return
-    const overdue = state.chores.filter(c => !c.archived).filter(c => stateOf(c, lastDoneMap[c.id], Date.now()) === STATE.OVERDUE)
-    maybeRemindOverdue(overdue, state.settings.reminderHour)
-    const id = setInterval(() => {
-      const od = state.chores.filter(c => !c.archived).filter(c => stateOf(c, lastDoneMap[c.id], Date.now()) === STATE.OVERDUE)
-      maybeRemindOverdue(od, state.settings.reminderHour)
-    }, 60 * 60 * 1000)
-    return () => clearInterval(id)
+    const run = () => maybeRemindOverdue(state.chores.filter(c => !c.archived).filter(c => stateOf(c, lastDoneMap[c.id], Date.now()) === STATE.OVERDUE), state.settings.reminderHour)
+    run(); const id = setInterval(run, 60 * 60 * 1000); return () => clearInterval(id)
   }, [state.settings.notificationsEnabled, state.settings.reminderHour, state.chores, lastDoneMap])
+
+  // sync compact due-schedule to push backend when background push is on
+  useEffect(() => {
+    if (!state.settings.pushEnabled) return
+    const items = state.chores.filter(c => !c.archived && c.cadenceDays)
+      .map(c => ({ id: c.id, name: c.name, dueAt: dueAt(lastDoneMap[c.id], c.cadenceDays) }))
+      .filter(x => x.dueAt)
+    const t = setTimeout(() => syncSchedule(items), 800)
+    return () => clearTimeout(t)
+  }, [state.settings.pushEnabled, state.chores, lastDoneMap])
 
   const cats = state.categories.filter(c => !c.parentId)
   const person = (ch) => state.people.find(p => p.id === ch.personId)
-
   const openDetail = (ch) => setDetail(ch)
   const openEdit = (ch) => { setDetail(null); setEditing(ch); setAddOpen(true) }
   const openAdd = () => { setEditing(null); setAddOpen(true) }
 
-  const counts = useMemo(() => {
-    let overdue = 0
-    for (const c of state.chores) if (!c.archived && stateOf(c, lastDoneMap[c.id], now) === STATE.OVERDUE) overdue++
-    return { overdue }
-  }, [state.chores, lastDoneMap, now])
+  const overdueCount = useMemo(() => state.chores.filter(c => !c.archived && stateOf(c, lastDoneMap[c.id], now) === STATE.OVERDUE).length, [state.chores, lastDoneMap, now])
+
+  const title = tab === 'stats' ? 'Activity' : tab === 'settings' ? 'Settings' : tab === 'due' ? 'Due soon' : 'Last Done'
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-slate-100/80 dark:bg-slate-950/80 backdrop-blur-lg" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className="max-w-2xl mx-auto px-4 pt-3 pb-2">
+    <div className="min-h-screen bg-canvas text-ink flex flex-col">
+      <header className="sticky top-0 z-30 bg-canvas/85 backdrop-blur-md border-b border-line" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="max-w-2xl mx-auto px-4 pt-3.5 pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-extrabold tracking-tight">
-                {tab === 'stats' ? 'Activity' : tab === 'settings' ? 'Settings' : tab === 'due' ? 'Due soon' : 'Last Done'}
-              </h1>
-              {tab === 'home' && <p className="text-xs text-slate-500">{decorated.length} tracked{counts.overdue > 0 ? ` · ${counts.overdue} overdue` : ''}</p>}
+              <h1 className="text-[19px] font-semibold tracking-tightest leading-none">{title}</h1>
+              {tab === 'home' && <p className="font-mono text-[11px] text-faint tnum mt-1">{decorated.length} tracked{overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}</p>}
             </div>
             {state.people.length > 0 && (tab === 'home' || tab === 'due') && (
               <div className="flex items-center gap-1">
                 <button onClick={() => api.setSettings({ activePersonId: null })}
-                  className={`px-2.5 py-1 rounded-full text-sm font-semibold ${!activePerson ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-500'}`}>All</button>
+                  className={`px-2 h-7 rounded-md text-[12px] font-medium border transition-colors ${!activePerson ? 'border-ink text-ink' : 'border-line text-faint hover:border-line-strong'}`}>All</button>
                 {state.people.map(p => (
-                  <button key={p.id} onClick={() => api.setSettings({ activePersonId: p.id })}
-                    className="w-8 h-8 rounded-full grid place-items-center text-base transition"
-                    style={activePerson?.id === p.id ? { background: p.color, transform: 'scale(1.1)' } : { background: (p.color||'#64748b')+'22' }}
-                    title={p.name}>{p.emoji}</button>
+                  <button key={p.id} onClick={() => api.setSettings({ activePersonId: p.id })} title={p.name}>
+                    <Avatar person={p} size={28} active={activePerson?.id === p.id} />
+                  </button>
                 ))}
               </div>
             )}
@@ -111,28 +121,25 @@ export default function App() {
 
           {tab === 'home' && (
             <>
-              <div className="mt-2 relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-                <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search chores…"
-                  className="w-full rounded-xl bg-white dark:bg-slate-900 pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ring-1 ring-slate-200 dark:ring-slate-800" />
+              <div className="mt-3 relative">
+                <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
+                <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search chores"
+                  className="w-full rounded-lg bg-surface border border-line pl-8 pr-3 py-2 text-[13px] text-ink placeholder:text-faint outline-none focus:border-accent" />
               </div>
-              <div className="mt-2 flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+              <div className="mt-2 flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4">
                 <Chip active={!activeCat} onClick={() => setActiveCat(null)}>All</Chip>
-                {cats.map(c => <Chip key={c.id} active={activeCat === c.id} onClick={() => setActiveCat(c.id)} color={c.color}>{c.icon} {c.name}</Chip>)}
+                {cats.map(c => <Chip key={c.id} active={activeCat === c.id} onClick={() => setActiveCat(c.id)}>{c.name}</Chip>)}
               </div>
             </>
           )}
         </div>
       </header>
 
-      {/* Body */}
       <main className="flex-1 max-w-2xl w-full mx-auto pb-28">
         {tab === 'home' && (
-          <div className="p-4 pt-2">
-            {decorated.length === 0 ? (
-              <Empty query={query} onAdd={openAdd} />
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="p-4 pt-3">
+            {decorated.length === 0 ? <Empty query={query} onAdd={openAdd} /> : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {decorated.map(({ chore, lastDone }) => (
                   <div key={chore.id} className="animate-fadeup">
                     <ChoreCard chore={chore} lastDone={lastDone} now={now} person={person(chore)} onComplete={(id) => api.complete(id, { personId: chore.personId })} onOpen={openDetail} />
@@ -144,17 +151,17 @@ export default function App() {
         )}
 
         {tab === 'due' && (
-          <div className="p-4 pt-2">
-            {overdueList.length === 0 ? (
-              <div className="text-center py-20">
-                <div className="text-5xl mb-3">🎉</div>
-                <p className="font-semibold text-slate-700 dark:text-slate-300">Nothing’s due</p>
-                <p className="text-sm text-slate-500">You’re all caught up{activePerson ? ` for ${activePerson.name}` : ''}.</p>
+          <div className="p-4 pt-3">
+            {dueList.length === 0 ? (
+              <div className="text-center py-24">
+                <PartyPopper size={30} className="mx-auto text-faint mb-3" />
+                <p className="text-[14px] font-medium text-ink">Nothing’s due</p>
+                <p className="text-[13px] text-faint mt-0.5">You’re all caught up{activePerson ? ` for ${activePerson.name}` : ''}.</p>
               </div>
             ) : (
-              <div className="space-y-2.5">
-                {overdueList.map(chore => (
-                  <ChoreCard key={chore.id} chore={chore} lastDone={lastDoneMap[chore.id]} now={now} person={person(chore)} onComplete={(id) => api.complete(id, { personId: chore.personId })} onOpen={openDetail} />
+              <div className="space-y-2">
+                {dueList.map(({ chore, lastDone }) => (
+                  <ChoreCard key={chore.id} chore={chore} lastDone={lastDone} now={now} person={person(chore)} onComplete={(id) => api.complete(id, { personId: chore.personId })} onOpen={openDetail} />
                 ))}
               </div>
             )}
@@ -165,22 +172,20 @@ export default function App() {
         {tab === 'settings' && <Settings />}
       </main>
 
-      {/* FAB */}
       {(tab === 'home' || tab === 'due') && (
-        <button onClick={openAdd}
-          className="fixed z-40 right-5 bottom-24 w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-3xl grid place-items-center shadow-lg shadow-blue-600/30 active:scale-90 transition">
-          +
+        <button onClick={openAdd} aria-label="Add chore"
+          className="fixed z-40 right-5 bottom-[88px] w-12 h-12 rounded-full bg-accent text-white grid place-items-center active:scale-90 transition-transform"
+          style={{ boxShadow: '0 4px 16px var(--accent-soft)' }}>
+          <Plus size={22} />
         </button>
       )}
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800"
-           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-md border-t border-line" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-2xl mx-auto grid grid-cols-4">
-          <NavBtn icon="🏠" label="Chores" active={tab === 'home'} onClick={() => setTab('home')} />
-          <NavBtn icon="⏰" label="Due" active={tab === 'due'} onClick={() => setTab('due')} badge={counts.overdue} />
-          <NavBtn icon="📊" label="Activity" active={tab === 'stats'} onClick={() => setTab('stats')} />
-          <NavBtn icon="⚙️" label="Settings" active={tab === 'settings'} onClick={() => setTab('settings')} />
+          <NavBtn Icon={ListChecks} label="Chores" active={tab === 'home'} onClick={() => setTab('home')} />
+          <NavBtn Icon={Clock} label="Due" active={tab === 'due'} onClick={() => setTab('due')} badge={overdueCount} />
+          <NavBtn Icon={BarChart3} label="Activity" active={tab === 'stats'} onClick={() => setTab('stats')} />
+          <NavBtn Icon={Settings2} label="Settings" active={tab === 'settings'} onClick={() => setTab('settings')} />
         </div>
       </nav>
 
@@ -190,33 +195,29 @@ export default function App() {
   )
 }
 
-function Chip({ children, active, onClick, color }) {
+function Chip({ children, active, onClick }) {
   return (
     <button onClick={onClick}
-      className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition ${active ? 'text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-800'}`}
-      style={active ? { background: color || '#2563eb' } : undefined}>
-      {children}
-    </button>
+      className={`shrink-0 px-2.5 h-7 rounded-md text-[12px] font-medium whitespace-nowrap border transition-colors ${active ? 'border-ink text-ink bg-inset' : 'border-line text-muted hover:border-line-strong'}`}>{children}</button>
   )
 }
 
-function NavBtn({ icon, label, active, onClick, badge }) {
+function NavBtn({ Icon, label, active, onClick, badge }) {
   return (
-    <button onClick={onClick} className={`relative py-2.5 flex flex-col items-center gap-0.5 ${active ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
-      <span className="text-xl leading-none">{icon}</span>
-      <span className="text-[11px] font-semibold">{label}</span>
-      {badge > 0 && <span className="absolute top-1.5 right-1/2 translate-x-4 bg-red-500 text-white text-[10px] font-bold min-w-4 h-4 px-1 rounded-full grid place-items-center">{badge}</span>}
+    <button onClick={onClick} className={`relative py-2 flex flex-col items-center gap-0.5 transition-colors ${active ? 'text-accent' : 'text-faint hover:text-muted'}`}>
+      <Icon size={19} strokeWidth={active ? 2.25 : 1.75} />
+      <span className="text-[10px] font-medium">{label}</span>
+      {badge > 0 && <span className="absolute top-1 right-1/2 translate-x-3.5 bg-red-500 text-white font-mono text-[9px] tnum min-w-[15px] h-[15px] px-1 rounded-full grid place-items-center">{badge}</span>}
     </button>
   )
 }
 
 function Empty({ query, onAdd }) {
   return (
-    <div className="text-center py-20">
-      <div className="text-5xl mb-3">{query ? '🔍' : '🌱'}</div>
-      <p className="font-semibold text-slate-700 dark:text-slate-300">{query ? 'No matches' : 'No chores yet'}</p>
-      <p className="text-sm text-slate-500 mb-4">{query ? 'Try a different search.' : 'Add the recurring stuff you keep forgetting.'}</p>
-      {!query && <button onClick={onAdd} className="px-5 py-2.5 rounded-xl font-semibold text-white bg-blue-600">+ Add your first chore</button>}
+    <div className="text-center py-24">
+      <p className="text-[14px] font-medium text-ink">{query ? 'No matches' : 'No chores yet'}</p>
+      <p className="text-[13px] text-faint mt-0.5 mb-4">{query ? 'Try a different search.' : 'Add the recurring stuff you keep forgetting.'}</p>
+      {!query && <button onClick={onAdd} className="px-4 py-2 rounded-lg font-medium text-[13px] text-white bg-accent inline-flex items-center gap-1.5"><Plus size={15} /> Add your first chore</button>}
     </div>
   )
 }

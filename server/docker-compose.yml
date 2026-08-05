@@ -1,0 +1,11 @@
+services:
+  push:
+    build: .
+    container_name: lastdone-push
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data

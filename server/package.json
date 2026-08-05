@@ -1,0 +1,18 @@
+{
+  "name": "lastdone-push-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted Web Push backend for Last Done — sends overdue reminders when the app is closed.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "keys": "node -e \"import('web-push').then(w=>{const k=w.default.generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey);console.log('VAPID_PRIVATE_KEY='+k.privateKey)})\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "web-push": "^3.6.7"
+  }
+}
