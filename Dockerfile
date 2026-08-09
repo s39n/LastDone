@@ -1,35 +1,20 @@
-# ==========================================
-# Stage 1: Build the Vite Application
-# ==========================================
-FROM node:18-alpine AS builder
+FROM node:18-alpine
 
-# Set the working directory inside the container
+# Set the working directory
 WORKDIR /app
 
-# Copy dependency manifests first to leverage Docker layer caching
+# Copy dependency manifests and install
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy the rest of the project files
+# Copy the rest of the application code
 COPY . .
 
-# Build the production-ready static files 
-# (Vite outputs to a 'dist' folder by default)
-RUN npm run build
+# The EXPOSE instruction is technically documentation since your 
+# compose file uses network_mode: host, but it's good practice.
+EXPOSE 4000
 
-# ==========================================
-# Stage 2: Serve the App with Nginx
-# ==========================================
-FROM nginx:alpine
-
-# Copy the compiled static files from the builder stage 
-# to the default Nginx web root directory
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Expose port 80 to the outside world
-EXPOSE 80
-
-# Start Nginx in the foreground
-CMD ["nginx", "-g", "daemon off;"]
+# Start the application. 
+# NOTE: Change "index.js" if your main entry file is named something else 
+# (e.g., "server.js" or "app.js"), or use CMD ["npm", "start"] if defined.
+CMD ["node", "index.js"]
