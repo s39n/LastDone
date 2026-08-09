@@ -64,6 +64,12 @@ function reducer(state, action) {
     case 'DELETE_COMPLETION':
       return { ...state, completions: state.completions.filter(d => d.id !== action.id) }
 
+    case 'CLEAR_CHORE_HISTORY':
+      return { ...state, completions: state.completions.filter(d => d.choreId !== action.choreId) }
+
+    case 'CLEAR_ALL_HISTORY':
+      return { ...state, completions: [] }
+
     case 'ADD_CATEGORY':
       return { ...state, categories: [...state.categories, action.category] }
 
@@ -132,6 +138,8 @@ export function StoreProvider({ children }) {
     complete: (choreId, opts = {}) => dispatch({ type: 'COMPLETE', choreId, ...opts }),
     undoComplete: (choreId) => dispatch({ type: 'UNDO_COMPLETE', choreId }),
     deleteCompletion: (id) => dispatch({ type: 'DELETE_COMPLETION', id }),
+    clearChoreHistory: (choreId) => dispatch({ type: 'CLEAR_CHORE_HISTORY', choreId }),
+    clearAllHistory: () => dispatch({ type: 'CLEAR_ALL_HISTORY' }),
     // categories
     addCategory: (category) => dispatch({ type: 'ADD_CATEGORY', category: { id: uid('c'), parentId: null, ...category } }),
     updateCategory: (category) => dispatch({ type: 'UPDATE_CATEGORY', category }),

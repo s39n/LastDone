@@ -55,7 +55,13 @@ export default function ChoreDetail({ chore, open, onClose, onEdit }) {
         <div className="mt-5">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-[11px] font-medium uppercase tracking-wide text-faint">History · <span className="font-mono tnum">{history.length}</span></h3>
-            {person && <div className="flex items-center gap-1.5"><Avatar person={person} size={18} /><span className="text-[12px] text-muted">{person.name}</span></div>}
+            <div className="flex items-center gap-2.5">
+              {person && <div className="flex items-center gap-1.5"><Avatar person={person} size={18} /><span className="text-[12px] text-muted">{person.name}</span></div>}
+              {history.length > 0 && (
+                <button onClick={() => { if (confirm(`Clear all history for “${chore.name}”?`)) api.clearChoreHistory(chore.id) }}
+                  className="text-[12px] font-medium text-faint hover:text-red-500 transition-colors">Clear</button>
+              )}
+            </div>
           </div>
           {history.length === 0 && <p className="text-[13px] text-faint py-4 text-center">No completions yet.</p>}
           <div className="space-y-px max-h-56 overflow-y-auto no-scrollbar rounded-lg border border-line divide-y divide-line">

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Plus, ChevronRight, Download, Upload, Bell, Send } from 'lucide-react'
+import { Plus, ChevronRight, Download, Upload, Bell, Send, Eraser } from 'lucide-react'
 import Sheet from './Sheet.jsx'
 import { IconPicker, ColorPicker, Avatar } from './Pickers.jsx'
 import { Icon } from '../lib/icons.jsx'
@@ -134,6 +134,11 @@ export default function Settings() {
           <button onClick={() => { if (confirm('Erase ALL chores and history? This cannot be undone.')) api.wipeAll() }}
             className="py-2.5 rounded-lg font-medium text-[13px] text-red-500 border border-line hover:border-red-500/40 transition-colors">Erase all</button>
         </div>
+        <button onClick={() => { if (confirm('Clear all completion history? Your chores, categories, and people stay — every card resets to “never done” and the activity heatmap empties.')) api.clearAllHistory() }}
+          className="mt-2 w-full py-2.5 rounded-lg font-medium text-[13px] text-muted border border-line hover:border-line-strong hover:text-ink transition-colors flex items-center justify-center gap-1.5">
+          <Eraser size={15} /> Clear history (keep chores)
+        </button>
+        <p className="text-[11px] text-faint mt-2 leading-relaxed">Tip: “Clear history” wipes the demo’s sample completions but keeps the example chores, so you start fresh with your own tracking.</p>
       </Section>
 
       <p className="text-center text-[11px] text-faint pt-1">Last Done · offline PWA · v0.2</p>
