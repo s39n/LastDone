@@ -13,7 +13,7 @@ services:
   push:
     build:
       context: .
-      dockerfile: server/Dockerfile
+      dockerfile: Dockerfile
     # Or deploy a prebuilt image instead of building — set IMAGE and drop build:
     # image: ${IMAGE:-ghcr.io/s39n/lastdone-push:latest}
     container_name: ${CONTAINER_NAME:-lastdone-push}
@@ -38,3 +38,5 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+
