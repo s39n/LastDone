@@ -11,15 +11,15 @@
 
 services:
   push:
-    # Pull the prebuilt image (built + published by GitHub Actions). This is the
-    # reliable path for a compose-only deployer like Dockhand — nothing is built
-    # on the host, so no repo checkout / build context is required.
-    image: ${IMAGE:-ghcr.io/s39n/lastdone-push:latest}
-    # --- Build instead of pull (ONLY works when the full repo is the build
-    # context, e.g. a real git checkout). Comment out image: above to use this: ---
-    # build:
-    #   context: .
-    #   dockerfile: server/Dockerfile
+    # Build from the full repo checkout (Dockhand pulls the whole repo). Context
+    # is the repo root, Dockerfile at server/Dockerfile — the frontend is built
+    # and bundled with the API into one image serving both the app and /push.
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    # --- Or pull the prebuilt image (published by GitHub Actions) instead of
+    # building — useful for a compose-only deployer. Comment out build: above: ---
+    # image: ${IMAGE:-ghcr.io/s39n/lastdone-push:latest}
     container_name: ${CONTAINER_NAME:-lastdone-push}
     restart: unless-stopped
     # Host networking avoids Docker "address pool" exhaustion and binds the app
