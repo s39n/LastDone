@@ -60,12 +60,16 @@ docker compose up -d --build      # from the repo root
 
 Then open `http://<host>:${PUSH_PORT}` (default 4000).
 
-Deploy via Dockhand (git-based stack):
+Deploy via Dockhand (pull a prebuilt image — recommended):
 
-1. Create the stack from a **Git repository** source pointing at this repo. It's private, so add a GitHub token (a read-only fine-grained PAT or deploy key) in Dockhand.
-2. Set the **compose path** to `docker-compose.yml` (repo root — not `server/`).
-3. In the stack's environment editor set at least `DATA_PATH` (a folder on your NAS) and `VAPID_CONTACT`; optionally `PUSH_PORT`.
-4. Deploy. A push to `main` triggers Dockhand's redeploy; because `DATA_PATH` lives on the NAS, subscriptions and the VAPID keypair survive rebuilds.
+Dockhand only stores the compose file, not the repo, so it can't *build* — it **pulls** the image that GitHub Actions publishes ([`.github/workflows/docker-publish.yml`](./.github/workflows/docker-publish.yml)) to `ghcr.io/s39n/lastdone-push:latest`.
+
+1. Push this repo so the workflow runs and publishes the image (check the Actions tab).
+2. Give the NAS access to the (private) image — either make the GHCR package public in its package settings, or on the NAS run `docker login ghcr.io -u s39n` with a `read:packages` PAT.
+3. In Dockhand, paste the root `docker-compose.yml` (or point at it); set `DATA_PATH` (a folder on your NAS) and `VAPID_CONTACT` in the env editor; optionally `PUSH_PORT` / `IMAGE`.
+4. Deploy. Each push to `main` rebuilds the image; redeploy in Dockhand to pull `:latest`. Because `DATA_PATH` lives on the NAS, subscriptions and the VAPID keypair survive across image updates.
+
+To build on the host instead (only if your deployer does a full git checkout), swap `image:` for the commented `build:` block in the root compose.
 
 See [`server/README.md`](./server/README.md) for the full env-var list, NAS/NFS storage, ports, and troubleshooting.
 

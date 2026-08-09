@@ -11,11 +11,15 @@
 
 services:
   push:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # Or deploy a prebuilt image instead of building — set IMAGE and drop build:
-    # image: ${IMAGE:-ghcr.io/s39n/lastdone-push:latest}
+    # Pull the prebuilt image (built + published by GitHub Actions). This is the
+    # reliable path for a compose-only deployer like Dockhand — nothing is built
+    # on the host, so no repo checkout / build context is required.
+    image: ${IMAGE:-ghcr.io/s39n/lastdone-push:latest}
+    # --- Build instead of pull (ONLY works when the full repo is the build
+    # context, e.g. a real git checkout). Comment out image: above to use this: ---
+    # build:
+    #   context: .
+    #   dockerfile: server/Dockerfile
     container_name: ${CONTAINER_NAME:-lastdone-push}
     restart: unless-stopped
     # Host networking avoids Docker "address pool" exhaustion and binds the app
