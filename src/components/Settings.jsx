@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Plus, ChevronRight, Download, Upload, Bell, Send, Eraser } from 'lucide-react'
+import { Plus, ChevronRight, Download, Upload, Bell, Send, Eraser, Cloud, RefreshCw, Copy } from 'lucide-react'
+import { validCode, randomCode } from '../lib/sync.js'
 import Sheet from './Sheet.jsx'
 import { IconPicker, ColorPicker, Avatar } from './Pickers.jsx'
 import { Icon } from '../lib/icons.jsx'
@@ -17,9 +18,19 @@ export default function Settings() {
   const [perm, setPerm] = useState(permission())
   const [pushOn, setPushOn] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [codeInput, setCodeInput] = useState(state.settings.syncCode || '')
   const fileRef = useRef()
 
   useEffect(() => { isPushActive().then(setPushOn) }, [])
+  useEffect(() => { setCodeInput(state.settings.syncCode || '') }, [state.settings.syncCode])
+
+  const syncOn = state.settings.syncEnabled && !!state.settings.syncCode
+  const toggleSync = () => {
+    if (syncOn) { api.setSettings({ syncEnabled: false }); return }
+    const code = codeInput.trim()
+    if (!validCode(code)) { alert('Enter a sync code: 4–64 letters, numbers, - or _ (or tap Generate).'); return }
+    api.setSettings({ syncEnabled: true, syncCode: code })
+  }
 
   const theme = state.settings.theme
 
@@ -122,6 +133,25 @@ export default function Settings() {
             </ListRow>
           ))}
         </List>
+      </Section>
+
+      <Section title="Sync across devices">
+        <div className="border border-line rounded-lg divide-y divide-line overflow-hidden">
+          <Row icon={<Cloud size={16} />} title="Cross-device sync"
+            sub={syncOn ? `On · code ${state.settings.syncCode}` : 'Off — data stays on this device only'}>
+            <button onClick={toggleSync} aria-label="Toggle sync"
+              className={`relative w-10 h-6 rounded-full transition-colors ${syncOn ? 'bg-accent' : 'bg-line-strong'}`}>
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${syncOn ? 'left-[18px]' : 'left-0.5'}`} />
+            </button>
+          </Row>
+          <div className="flex items-center gap-2 bg-surface px-3 py-2.5">
+            <input value={codeInput} onChange={e => setCodeInput(e.target.value)} placeholder="sync code" disabled={syncOn}
+              className="flex-1 rounded-md border border-line bg-inset px-2.5 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-accent disabled:opacity-60" />
+            {!syncOn && <button onClick={() => setCodeInput(randomCode())} className="text-muted hover:text-ink p-1" title="Generate"><RefreshCw size={15} /></button>}
+            <button onClick={() => navigator.clipboard?.writeText(codeInput)} className="text-muted hover:text-ink p-1" title="Copy"><Copy size={15} /></button>
+          </div>
+        </div>
+        <p className="text-[11px] text-faint mt-2 leading-relaxed">Enter the same code on each device to share your chores. Data is stored on your server under <span className="font-mono">DATA_PATH/sync</span>. It's last-write-wins, so link a new device before editing on it — the most recent save wins.</p>
       </Section>
 
       <Section title="Your data">

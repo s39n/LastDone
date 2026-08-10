@@ -24,13 +24,20 @@ function initState() {
 }
 
 // ---- reducer ----
-function reducer(state, action) {
+// Actions that adopt a full external state as-is (must NOT bump updatedAt).
+const NO_STAMP = new Set(['MERGE_STATE'])
+
+function baseReducer(state, action) {
   switch (action.type) {
     case 'RESET':
       return action.payload
 
     case 'IMPORT':
       return { ...action.payload }
+
+    case 'MERGE_STATE':
+      // adopt a full state from sync (keeps its own updatedAt via NO_STAMP)
+      return { ...action.state }
 
     case 'ADD_CHORE':
       return { ...state, chores: [...state.chores, action.chore] }
@@ -105,6 +112,15 @@ function reducer(state, action) {
   }
 }
 
+// Wrapper: stamp a top-level `updatedAt` whenever the state actually changes,
+// except when adopting an external state (sync merge keeps its own timestamp).
+function reducer(state, action) {
+  const next = baseReducer(state, action)
+  if (next === state) return state
+  if (NO_STAMP.has(action.type)) return next
+  return { ...next, updatedAt: Date.now() }
+}
+
 const StoreCtx = createContext(null)
 
 export function StoreProvider({ children }) {
@@ -153,6 +169,7 @@ export function StoreProvider({ children }) {
     // data mgmt
     exportData: () => JSON.stringify(state, null, 2),
     importData: (payload) => dispatch({ type: 'IMPORT', payload }),
+    mergeState: (incoming) => dispatch({ type: 'MERGE_STATE', state: incoming }),
     resetAll: () => dispatch({ type: 'RESET', payload: seedData() }),
     wipeAll: () => dispatch({ type: 'RESET', payload: { version: 2, people: [], categories: [], chores: [], completions: [], settings: { ...state.settings } } })
   }), [state])

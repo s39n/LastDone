@@ -10,6 +10,7 @@ import Settings from './components/Settings.jsx'
 import { STATE, stateOf, progressFor, dueFor } from './lib/dates.js'
 import { maybeRemindOverdue } from './lib/notifications.js'
 import { syncSchedule } from './lib/push.js'
+import { pull as syncPull, push as syncPush } from './lib/sync.js'
 
 const ORDER = { [STATE.OVERDUE]: 0, [STATE.DUE]: 1, [STATE.SOON]: 2, [STATE.FRESH]: 3, [STATE.UNTIMED]: 4, [STATE.SCHEDULED]: 5, [STATE.DORMANT]: 6 }
 
@@ -86,6 +87,44 @@ export default function App() {
     const t = setTimeout(() => syncSchedule(items), 800)
     return () => clearTimeout(t)
   }, [state.settings.pushEnabled, state.chores, lastDoneMap])
+
+  // ── cross-device sync (last-write-wins on state.updatedAt) ──
+  const stateRef = useRef(state); stateRef.current = state
+  const lastSyncedRef = useRef(0)
+  const syncOn = state.settings.syncEnabled && !!state.settings.syncCode
+  const syncCode = state.settings.syncCode
+
+  // push local state up when it changes
+  useEffect(() => {
+    if (!syncOn) return
+    const ver = state.updatedAt || 0
+    if (ver <= lastSyncedRef.current) return
+    const t = setTimeout(async () => {
+      const r = await syncPush(syncCode, stateRef.current)
+      if (r.ok) lastSyncedRef.current = stateRef.current.updatedAt || 0
+    }, 900)
+    return () => clearTimeout(t)
+  }, [syncOn, syncCode, state.updatedAt])
+
+  // pull from server on mount, focus, and every 15s; adopt if newer
+  useEffect(() => {
+    if (!syncOn) return
+    let stopped = false
+    const doPull = async () => {
+      const r = await syncPull(syncCode)
+      if (stopped || !r.ok || !r.state) return
+      const local = stateRef.current
+      if ((r.state.updatedAt || 0) > (local.updatedAt || 0)) {
+        lastSyncedRef.current = r.state.updatedAt || 0
+        api.mergeState(r.state)
+      }
+    }
+    doPull()
+    const id = setInterval(doPull, 15000)
+    const onFocus = () => doPull()
+    window.addEventListener('focus', onFocus)
+    return () => { stopped = true; clearInterval(id); window.removeEventListener('focus', onFocus) }
+  }, [syncOn, syncCode, api])
 
   const cats = state.categories.filter(c => !c.parentId)
   const person = (ch) => state.people.find(p => p.id === ch.personId)

@@ -44,6 +44,31 @@ export const store = {
   vaultPath: DATA_DIR
 }
 
+// ── Cross-device state sync (plaintext blobs under DATA_DIR/sync) ────────────
+const SYNC_DIR = path.join(DATA_DIR, 'sync')
+fs.mkdirSync(SYNC_DIR, { recursive: true })
+
+function sanitizeCode(code) {
+  if (typeof code !== 'string') return null
+  const c = code.trim()
+  return /^[A-Za-z0-9_-]{4,64}$/.test(c) ? c : null
+}
+
+export const sync = {
+  get(code) {
+    const c = sanitizeCode(code); if (!c) return { error: 'bad code' }
+    const f = path.join(SYNC_DIR, `${c}.json`)
+    if (!fs.existsSync(f)) return { state: null }
+    try { return { state: JSON.parse(fs.readFileSync(f, 'utf8')) } }
+    catch { return { state: null } }
+  },
+  put(code, state) {
+    const c = sanitizeCode(code); if (!c) return { error: 'bad code' }
+    fs.writeFileSync(path.join(SYNC_DIR, `${c}.json`), JSON.stringify(state))
+    return { ok: true, updatedAt: state && state.updatedAt }
+  }
+}
+
 export function loadOrCreateVapid(webpush) {
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     return { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY, source: 'env' }

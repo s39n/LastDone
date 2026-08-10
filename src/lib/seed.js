@@ -56,7 +56,8 @@ export function seedData() {
 
   return {
     version: 3,
+    updatedAt: 0, // fresh/empty baseline — any real device data wins on first sync
     people, categories, chores, completions,
-    settings: { theme: 'system', activePersonId: null, notificationsEnabled: false, pushEnabled: false, reminderHour: 9, seededAt: now }
+    settings: { theme: 'system', activePersonId: null, notificationsEnabled: false, pushEnabled: false, reminderHour: 9, syncEnabled: false, syncCode: '', seededAt: now }
   }
 }

@@ -5,7 +5,7 @@ import webpush from 'web-push'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { store, loadOrCreateVapid } from './store.js'
+import { store, sync, loadOrCreateVapid } from './store.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -24,7 +24,7 @@ if (vapid.source === 'generated') {
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: '256kb' }))
+app.use(express.json({ limit: '8mb' }))
 
 const router = express.Router()
 
@@ -63,6 +63,22 @@ router.post('/test', async (req, res) => {
 })
 
 app.use('/push', router)
+
+// ── Cross-device sync: plaintext app-state blobs keyed by a user's sync code ──
+const syncRouter = express.Router()
+syncRouter.get('/:code', (req, res) => {
+  const r = sync.get(req.params.code)
+  if (r.error) return res.status(400).json(r)
+  res.json(r) // { state: <obj|null> }
+})
+syncRouter.put('/:code', (req, res) => {
+  const state = req.body && req.body.state
+  if (!state || typeof state !== 'object') return res.status(400).json({ error: 'missing state' })
+  const r = sync.put(req.params.code, state)
+  if (r.error) return res.status(400).json(r)
+  res.json(r)
+})
+app.use('/sync', syncRouter)
 
 // The overdue sweep: for each subscriber, find items due now and not recently notified.
 async function sweep() {
@@ -106,7 +122,7 @@ if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
   }}))
   // SPA fallback for client routes (but never for the API).
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/push')) return next()
+    if (req.path.startsWith('/push') || req.path.startsWith('/sync')) return next()
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'))
   })
   console.log(`[web] serving PWA from ${PUBLIC_DIR}`)
