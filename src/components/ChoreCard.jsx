@@ -2,16 +2,16 @@ import React, { useState } from 'react'
 import { Check } from 'lucide-react'
 import { Icon } from '../lib/icons.jsx'
 import { Avatar } from './Pickers.jsx'
-import { STATE, stateOf, progress, colorFor, rgb, relative, cadenceLabel } from '../lib/dates.js'
+import { STATE, stateOf, progressFor, colorFor, rgb, relative, cadenceLabel } from '../lib/dates.js'
 
 const LABEL = {
-  [STATE.FRESH]: 'on track', [STATE.SOON]: 'soon', [STATE.DUE]: 'due',
+  [STATE.SCHEDULED]: 'scheduled', [STATE.FRESH]: 'on track', [STATE.SOON]: 'soon', [STATE.DUE]: 'due',
   [STATE.OVERDUE]: 'overdue', [STATE.UNTIMED]: '', [STATE.DORMANT]: 'off-season'
 }
 
 export default function ChoreCard({ chore, lastDone, now, person, onComplete, onOpen }) {
   const [pop, setPop] = useState(false)
-  const p = progress(lastDone, chore.cadenceDays, now)
+  const p = progressFor(chore, lastDone, now)
   const st = stateOf(chore, lastDone, now)
   const c = colorFor(st, p)
 
@@ -31,7 +31,7 @@ export default function ChoreCard({ chore, lastDone, now, person, onComplete, on
           <div className="text-[14px] font-medium text-ink truncate leading-tight">{chore.name}</div>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="font-mono text-[11px] tnum" style={{ color: rgb(c) }}>
-              {lastDone ? relative(lastDone, now) : 'never done'}
+              {st === STATE.SCHEDULED ? `starts ${relative(chore.startAt, now)}` : (lastDone ? relative(lastDone, now) : 'never done')}
             </span>
             {chore.cadenceDays ? <span className="text-[11px] text-faint">· {cadenceLabel(chore.cadenceDays).toLowerCase()}</span> : null}
           </div>

@@ -7,11 +7,11 @@ import ChoreDetail from './components/ChoreDetail.jsx'
 import AddEditChore from './components/AddEditChore.jsx'
 import Stats from './components/Stats.jsx'
 import Settings from './components/Settings.jsx'
-import { STATE, stateOf, progress, dueAt } from './lib/dates.js'
+import { STATE, stateOf, progressFor, dueFor } from './lib/dates.js'
 import { maybeRemindOverdue } from './lib/notifications.js'
 import { syncSchedule } from './lib/push.js'
 
-const ORDER = { [STATE.OVERDUE]: 0, [STATE.DUE]: 1, [STATE.SOON]: 2, [STATE.FRESH]: 3, [STATE.UNTIMED]: 4, [STATE.DORMANT]: 5 }
+const ORDER = { [STATE.OVERDUE]: 0, [STATE.DUE]: 1, [STATE.SOON]: 2, [STATE.FRESH]: 3, [STATE.UNTIMED]: 4, [STATE.SCHEDULED]: 5, [STATE.DORMANT]: 6 }
 
 export default function App() {
   const { state, api, lastDoneMap, now } = useStore()
@@ -64,7 +64,7 @@ export default function App() {
       .filter(c => !activePerson || c.personId === activePerson.id)
       .filter(c => !activeCat || c.categoryId === activeCat)
       .filter(c => !query || c.name.toLowerCase().includes(query.toLowerCase()))
-      .map(c => ({ chore: c, lastDone: lastDoneMap[c.id], st: stateOf(c, lastDoneMap[c.id], now), p: progress(lastDoneMap[c.id], c.cadenceDays, now) }))
+      .map(c => ({ chore: c, lastDone: lastDoneMap[c.id], st: stateOf(c, lastDoneMap[c.id], now), p: progressFor(c, lastDoneMap[c.id], now) }))
       .sort((a, b) => (ORDER[a.st] - ORDER[b.st]) || ((b.p ?? -1) - (a.p ?? -1)) || a.chore.name.localeCompare(b.chore.name))
   }, [state.chores, activePerson, activeCat, query, lastDoneMap, now])
 
@@ -80,8 +80,8 @@ export default function App() {
   // sync compact due-schedule to push backend when background push is on
   useEffect(() => {
     if (!state.settings.pushEnabled) return
-    const items = state.chores.filter(c => !c.archived && c.cadenceDays)
-      .map(c => ({ id: c.id, name: c.name, dueAt: dueAt(lastDoneMap[c.id], c.cadenceDays) }))
+    const items = state.chores.filter(c => !c.archived)
+      .map(c => ({ id: c.id, name: c.name, dueAt: dueFor(c, lastDoneMap[c.id]) }))
       .filter(x => x.dueAt)
     const t = setTimeout(() => syncSchedule(items), 800)
     return () => clearTimeout(t)

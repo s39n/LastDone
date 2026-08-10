@@ -62,11 +62,32 @@ export function dueAt(lastDone, cadenceDays) {
   return lastDone + cadenceDays * DAY_MS
 }
 
-export const STATE = { FRESH: 'fresh', SOON: 'soon', DUE: 'due', OVERDUE: 'overdue', UNTIMED: 'untimed', DORMANT: 'dormant' }
+// startAt-aware due date: before the first completion, the first occurrence is
+// due on the chore's start date; after that, normal cadence from lastDone.
+export function dueFor(chore, lastDone) {
+  if (lastDone != null) return dueAt(lastDone, chore.cadenceDays)
+  if (chore.startAt != null) return chore.startAt
+  return null
+}
+
+// startAt-aware progress. Handles chores scheduled to begin in the future.
+export function progressFor(chore, lastDone, ref = Date.now()) {
+  const cadence = chore.cadenceDays
+  // Never completed but has a start date: anchor everything to that date.
+  if (lastDone == null && chore.startAt != null) {
+    if (ref < chore.startAt) return -1            // scheduled (not started yet)
+    if (!cadence) return 1                          // untimed event whose date has arrived -> due
+    return (ref - chore.startAt) / (cadence * DAY_MS) + 1  // due AT startAt, ramps overdue after
+  }
+  return progress(lastDone, cadence, ref)
+}
+
+export const STATE = { SCHEDULED: 'scheduled', FRESH: 'fresh', SOON: 'soon', DUE: 'due', OVERDUE: 'overdue', UNTIMED: 'untimed', DORMANT: 'dormant' }
 
 export function stateOf(chore, lastDone, ref = Date.now()) {
   if (chore.season && !inSeason(chore.season, ref)) return STATE.DORMANT
-  const p = progress(lastDone, chore.cadenceDays, ref)
+  if (lastDone == null && chore.startAt != null && ref < chore.startAt) return STATE.SCHEDULED
+  const p = progressFor(chore, lastDone, ref)
   if (p == null) return STATE.UNTIMED
   if (p >= 1) return STATE.OVERDUE
   if (p >= 0.75) return STATE.DUE
@@ -85,6 +106,7 @@ const AMBER = [245, 158, 11]
 const RED = [239, 68, 68]
 
 export function colorFor(state, p) {
+  if (state === STATE.SCHEDULED) return [99, 102, 241]  // indigo — upcoming
   if (state === STATE.UNTIMED) return [100, 116, 139]   // slate
   if (state === STATE.DORMANT) return [71, 85, 105]     // dim slate
   const t = Math.max(0, Math.min(1, p ?? 0))

@@ -8,6 +8,7 @@ import { useStore } from '../lib/store.jsx'
 
 const input = 'w-full rounded-lg border border-line bg-inset px-3 py-2.5 text-[14px] text-ink placeholder:text-faint outline-none focus:border-accent'
 const label = 'text-[11px] font-medium uppercase tracking-wide text-faint mb-1.5 block'
+const tsToInput = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
 
 export default function AddEditChore({ open, onClose, editing, defaultCategoryId }) {
   const { state, api } = useStore()
@@ -21,6 +22,7 @@ export default function AddEditChore({ open, onClose, editing, defaultCategoryId
   const [note, setNote] = useState('')
   const [seasonal, setSeasonal] = useState(false)
   const [season, setSeason] = useState({ start: 11, end: 2 })
+  const [startDate, setStartDate] = useState('') // yyyy-mm-dd, '' = starts now
 
   React.useEffect(() => {
     if (!open) return
@@ -30,12 +32,14 @@ export default function AddEditChore({ open, onClose, editing, defaultCategoryId
     setCustomDays(editing?.cadenceDays && !CADENCE_PRESETS.some(p => p.days === editing.cadenceDays) ? String(editing.cadenceDays) : '')
     setPersonId(editing?.personId || null); setNote(editing?.note || '')
     setSeasonal(!!editing?.season); setSeason(editing?.season || { start: 11, end: 2 })
+    setStartDate(editing?.startAt ? tsToInput(editing.startAt) : '')
   }, [open, editing]) // eslint-disable-line
 
   const save = () => {
     if (!name.trim()) return
     const finalCadence = customDays ? (Math.max(1, parseInt(customDays, 10) || 0) || null) : cadenceDays
-    const payload = { name: name.trim(), icon, categoryId, cadenceDays: finalCadence, personId, note: note.trim(), season: seasonal ? season : null }
+    const startAt = startDate ? new Date(startDate + 'T00:00:00').getTime() : null
+    const payload = { name: name.trim(), icon, categoryId, cadenceDays: finalCadence, personId, note: note.trim(), season: seasonal ? season : null, startAt }
     if (isEdit) api.updateChore({ id: editing.id, ...payload }); else api.addChore(payload)
     onClose()
   }
@@ -80,6 +84,15 @@ export default function AddEditChore({ open, onClose, editing, defaultCategoryId
               className="w-16 rounded-md border border-line bg-inset px-2 py-1.5 text-center font-mono tnum text-ink outline-none focus:border-accent" />
             <span>days</span>
           </div>
+        </div>
+
+        <div>
+          <label className={label}>Starts on <span className="text-faint normal-case tracking-normal">· optional, for future events</span></label>
+          <div className="flex items-center gap-2">
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={input + ' flex-1'} />
+            {startDate && <button type="button" onClick={() => setStartDate('')} className="text-[13px] font-medium text-faint hover:text-ink">Clear</button>}
+          </div>
+          <p className="text-[11px] text-faint mt-1.5">Leave blank to start now. Set a future date and it stays “scheduled” — not overdue — until then.</p>
         </div>
 
         {state.people.length > 0 && (

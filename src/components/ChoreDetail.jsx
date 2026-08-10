@@ -4,7 +4,7 @@ import Sheet from './Sheet.jsx'
 import { Icon } from '../lib/icons.jsx'
 import { Avatar } from './Pickers.jsx'
 import { useStore } from '../lib/store.jsx'
-import { relative, fullDate, cadenceLabel, dueAt, stateOf, progress, colorFor, rgb, STATE } from '../lib/dates.js'
+import { relative, fullDate, cadenceLabel, dueFor, stateOf, progressFor, colorFor, rgb, STATE } from '../lib/dates.js'
 
 export default function ChoreDetail({ chore, open, onClose, onEdit }) {
   const { state, api, lastDoneMap, now } = useStore()
@@ -12,10 +12,10 @@ export default function ChoreDetail({ chore, open, onClose, onEdit }) {
   if (!chore) return null
 
   const lastDone = lastDoneMap[chore.id]
-  const p = progress(lastDone, chore.cadenceDays, now)
+  const p = progressFor(chore, lastDone, now)
   const st = stateOf(chore, lastDone, now)
   const c = colorFor(st, p)
-  const due = dueAt(lastDone, chore.cadenceDays)
+  const due = dueFor(chore, lastDone)
   const person = state.people.find(x => x.id === chore.personId)
   const cat = state.categories.find(x => x.id === chore.categoryId)
   const history = state.completions.filter(d => d.choreId === chore.id).sort((a, b) => b.ts - a.ts)
@@ -40,7 +40,7 @@ export default function ChoreDetail({ chore, open, onClose, onEdit }) {
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Stat label="Last done" value={lastDone ? relative(lastDone, now) : 'never'} sub={lastDone ? fullDate(lastDone) : '—'} c={c} />
-          <Stat label={st === STATE.OVERDUE ? 'Overdue' : 'Next due'} value={due ? relative(due, now) : '—'} sub={due ? fullDate(due) : 'no schedule'} c={c} />
+          <Stat label={st === STATE.OVERDUE ? 'Overdue' : st === STATE.SCHEDULED ? 'Starts' : 'Next due'} value={due ? relative(due, now) : '—'} sub={due ? fullDate(due) : 'no schedule'} c={c} />
         </div>
 
         <div className="mt-4">
