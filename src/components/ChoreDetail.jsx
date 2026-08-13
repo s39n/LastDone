@@ -1,14 +1,22 @@
-import React, { useState } from 'react'
-import { Check, Trash2, Archive, Pencil, X } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Check, Trash2, Archive, Pencil, X, Clock } from 'lucide-react'
 import Sheet from './Sheet.jsx'
 import { Icon } from '../lib/icons.jsx'
 import { Avatar } from './Pickers.jsx'
 import { useStore } from '../lib/store.jsx'
 import { relative, fullDate, cadenceLabel, dueFor, stateOf, progressFor, colorFor, rgb, STATE } from '../lib/dates.js'
 
+function nowLocalInput() {
+  const d = new Date(); d.setSeconds(0, 0)
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 export default function ChoreDetail({ chore, open, onClose, onEdit }) {
   const { state, api, lastDoneMap, now } = useStore()
   const [note, setNote] = useState('')
+  const [when, setWhen] = useState('')
+  useEffect(() => { if (open) { setNote(''); setWhen(nowLocalInput()) } }, [open, chore?.id])
   if (!chore) return null
 
   const lastDone = lastDoneMap[chore.id]
@@ -20,7 +28,12 @@ export default function ChoreDetail({ chore, open, onClose, onEdit }) {
   const cat = state.categories.find(x => x.id === chore.categoryId)
   const history = state.completions.filter(d => d.choreId === chore.id).sort((a, b) => b.ts - a.ts)
 
-  const doComplete = () => { api.complete(chore.id, { note: note.trim(), personId: chore.personId }); setNote('') }
+  const whenTs = when ? new Date(when).getTime() : Date.now()
+  const backdated = Date.now() - whenTs > 90000 // >~1.5 min ago
+  const doComplete = () => {
+    api.complete(chore.id, { ts: whenTs, note: note.trim(), personId: chore.personId })
+    setNote(''); setWhen(nowLocalInput())
+  }
 
   return (
     <Sheet open={open} onClose={onClose} title="">
@@ -44,11 +57,17 @@ export default function ChoreDetail({ chore, open, onClose, onEdit }) {
         </div>
 
         <div className="mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock size={15} className="text-faint shrink-0" />
+            <input type="datetime-local" value={when} max={nowLocalInput()} onChange={e => setWhen(e.target.value)}
+              className="flex-1 rounded-lg border border-line bg-inset px-3 py-2 text-[13px] font-mono text-ink outline-none focus:border-accent" />
+            {backdated && <button onClick={() => setWhen(nowLocalInput())} className="text-[12px] font-medium text-faint hover:text-ink shrink-0">Now</button>}
+          </div>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note to this completion"
             className="w-full rounded-lg border border-line bg-inset px-3 py-2.5 mb-2 text-[14px] text-ink placeholder:text-faint outline-none focus:border-accent" />
           <button onClick={doComplete}
             className="w-full py-3 rounded-lg font-medium text-[14px] text-white flex items-center justify-center gap-2 active:scale-[0.99] transition-transform" style={{ background: rgb(c) }}>
-            <Check size={17} strokeWidth={2.25} /> Mark done now
+            <Check size={17} strokeWidth={2.25} /> {backdated ? `Mark done · ${relative(whenTs, now)}` : 'Mark done now'}
           </button>
         </div>
 
