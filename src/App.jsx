@@ -88,43 +88,59 @@ export default function App() {
     return () => clearTimeout(t)
   }, [state.settings.pushEnabled, state.chores, lastDoneMap])
 
-  // ── cross-device sync (last-write-wins on state.updatedAt) ──
+  // ── cross-device sync ──
+  // Data-only (chores/history/people/categories); device-local settings never sync.
+  // Linking a NEW device to a code DOWNLOADS the server copy (server wins) so a
+  // fresh/erased device can't clobber your data. After linking, ongoing edits use
+  // last-write-wins on the data `updatedAt`.
   const stateRef = useRef(state); stateRef.current = state
   const lastSyncedRef = useRef(0)
   const syncOn = state.settings.syncEnabled && !!state.settings.syncCode
   const syncCode = state.settings.syncCode
+  const joinedCode = state.settings.syncJoinedCode
 
-  // push local state up when it changes
+  const dataSlice = (s) => ({
+    version: s.version, updatedAt: s.updatedAt || 0,
+    people: s.people, categories: s.categories, chores: s.chores, completions: s.completions
+  })
+
+  // push local data up when it changes
   useEffect(() => {
     if (!syncOn) return
     const ver = state.updatedAt || 0
     if (ver <= lastSyncedRef.current) return
     const t = setTimeout(async () => {
-      const r = await syncPush(syncCode, stateRef.current)
+      const r = await syncPush(syncCode, dataSlice(stateRef.current))
       if (r.ok) lastSyncedRef.current = stateRef.current.updatedAt || 0
     }, 900)
     return () => clearTimeout(t)
   }, [syncOn, syncCode, state.updatedAt])
 
-  // pull from server on mount, focus, and every 15s; adopt if newer
+  // pull on mount, focus, and every 15s. First contact with a code = JOIN (download).
   useEffect(() => {
     if (!syncOn) return
     let stopped = false
     const doPull = async () => {
       const r = await syncPull(syncCode)
-      if (stopped || !r.ok || !r.state) return
+      if (stopped || !r.ok) return
       const local = stateRef.current
-      if ((r.state.updatedAt || 0) > (local.updatedAt || 0)) {
+      const joining = local.settings.syncJoinedCode !== syncCode
+      if (r.state && (joining || (r.state.updatedAt || 0) > (local.updatedAt || 0))) {
         lastSyncedRef.current = r.state.updatedAt || 0
-        api.mergeState(r.state)
+        api.mergeState(r.state)           // server wins on join, else newer wins
+      } else if (joining && !r.state) {
+        // establishing the code: seed the server from this device
+        await syncPush(syncCode, dataSlice(local))
+        lastSyncedRef.current = local.updatedAt || 0
       }
+      if (joining) api.setSettings({ syncJoinedCode: syncCode })
     }
     doPull()
     const id = setInterval(doPull, 15000)
     const onFocus = () => doPull()
     window.addEventListener('focus', onFocus)
     return () => { stopped = true; clearInterval(id); window.removeEventListener('focus', onFocus) }
-  }, [syncOn, syncCode, api])
+  }, [syncOn, syncCode, joinedCode, api])
 
   const cats = state.categories.filter(c => !c.parentId)
   const person = (ch) => state.people.find(p => p.id === ch.personId)

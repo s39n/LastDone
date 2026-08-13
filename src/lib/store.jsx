@@ -24,8 +24,10 @@ function initState() {
 }
 
 // ---- reducer ----
-// Actions that adopt a full external state as-is (must NOT bump updatedAt).
-const NO_STAMP = new Set(['MERGE_STATE'])
+// Actions that must NOT bump the data `updatedAt`:
+//  - MERGE_STATE adopts an external copy and keeps its timestamp
+//  - SET_SETTINGS changes device-local prefs (theme, sync code) which are never synced
+const NO_STAMP = new Set(['MERGE_STATE', 'SET_SETTINGS'])
 
 function baseReducer(state, action) {
   switch (action.type) {
@@ -35,9 +37,23 @@ function baseReducer(state, action) {
     case 'IMPORT':
       return { ...action.payload }
 
-    case 'MERGE_STATE':
-      // adopt a full state from sync (keeps its own updatedAt via NO_STAMP)
-      return { ...action.state }
+    case 'MERGE_STATE': {
+      // adopt DATA only from a synced copy; keep this device's local settings.
+      const s = action.state || {}
+      return {
+        ...state,
+        version: s.version ?? state.version,
+        updatedAt: s.updatedAt || 0,
+        people: s.people || [],
+        categories: s.categories || [],
+        chores: s.chores || [],
+        completions: s.completions || []
+      }
+    }
+
+    case 'TOUCH':
+      // no-op data change → wrapper stamps a fresh updatedAt (used by "upload now")
+      return { ...state }
 
     case 'ADD_CHORE':
       return { ...state, chores: [...state.chores, action.chore] }
@@ -170,6 +186,7 @@ export function StoreProvider({ children }) {
     exportData: () => JSON.stringify(state, null, 2),
     importData: (payload) => dispatch({ type: 'IMPORT', payload }),
     mergeState: (incoming) => dispatch({ type: 'MERGE_STATE', state: incoming }),
+    touch: () => dispatch({ type: 'TOUCH' }),
     resetAll: () => dispatch({ type: 'RESET', payload: seedData() }),
     wipeAll: () => dispatch({ type: 'RESET', payload: { version: 2, people: [], categories: [], chores: [], completions: [], settings: { ...state.settings } } })
   }), [state])

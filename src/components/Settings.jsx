@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Plus, ChevronRight, Download, Upload, Bell, Send, Eraser, Cloud, RefreshCw, Copy } from 'lucide-react'
-import { validCode, randomCode } from '../lib/sync.js'
+import { validCode, randomCode, pull as syncPull } from '../lib/sync.js'
 import Sheet from './Sheet.jsx'
 import { IconPicker, ColorPicker, Avatar } from './Pickers.jsx'
 import { Icon } from '../lib/icons.jsx'
@@ -29,7 +29,17 @@ export default function Settings() {
     if (syncOn) { api.setSettings({ syncEnabled: false }); return }
     const code = codeInput.trim()
     if (!validCode(code)) { alert('Enter a sync code: 4–64 letters, numbers, - or _ (or tap Generate).'); return }
+    // linking to a code you haven't joined on this device downloads the server copy
     api.setSettings({ syncEnabled: true, syncCode: code })
+  }
+  const uploadNow = () => {
+    if (confirm('Make THIS device the source of truth? It overwrites the synced copy (and other devices) with this device’s data.')) api.touch()
+  }
+  const downloadNow = async () => {
+    if (!confirm('Replace THIS device’s data with the synced copy from the server?')) return
+    const r = await syncPull(state.settings.syncCode)
+    if (r.ok && r.state) api.mergeState(r.state)
+    else alert(r.state === null ? 'Nothing stored on the server for this code yet.' : `Couldn’t reach the server (${r.reason || 'error'}).`)
   }
 
   const theme = state.settings.theme
@@ -151,7 +161,13 @@ export default function Settings() {
             <button onClick={() => navigator.clipboard?.writeText(codeInput)} className="text-muted hover:text-ink p-1" title="Copy"><Copy size={15} /></button>
           </div>
         </div>
-        <p className="text-[11px] text-faint mt-2 leading-relaxed">Enter the same code on each device to share your chores. Data is stored on your server under <span className="font-mono">DATA_PATH/sync</span>. It's last-write-wins, so link a new device before editing on it — the most recent save wins.</p>
+        {syncOn && (
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <OutlineBtn onClick={uploadNow}><Upload size={15} /> This device wins</OutlineBtn>
+            <OutlineBtn onClick={downloadNow}><Download size={15} /> Use server copy</OutlineBtn>
+          </div>
+        )}
+        <p className="text-[11px] text-faint mt-2 leading-relaxed">Enter the same code on each device to share your chores (stored on your server under <span className="font-mono">DATA_PATH/sync</span>). Linking a device <span className="text-muted">downloads</span> the existing data, so a new or erased device can’t wipe your others. After that it’s last-write-wins. Use “This device wins” to force-upload, or “Use server copy” to pull down.</p>
       </Section>
 
       <Section title="Your data">
