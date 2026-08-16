@@ -19,6 +19,7 @@ export default function Settings() {
   const [pushOn, setPushOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [codeInput, setCodeInput] = useState(state.settings.syncCode || '')
+  const [pendingImport, setPendingImport] = useState(null)
   const fileRef = useRef()
 
   useEffect(() => { isPushActive().then(setPushOn) }, [])
@@ -50,11 +51,37 @@ export default function Settings() {
     const a = document.createElement('a'); a.href = url
     a.download = `lastdone-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url)
   }
+  // Restore a backup into DATA only — keep this device's local settings (theme, sync
+  // code, and the syncJoinedCode marker) so the restore isn't treated as a fresh sync
+  // "join" and instantly overwritten by the server copy.
+  const applyBackup = (d) => {
+    api.importData({ ...d, settings: { ...state.settings, syncJoinedCode: state.settings.syncCode || null } })
+  }
   const doImport = (e) => {
     const file = e.target.files?.[0]; if (!file) return
     const reader = new FileReader()
-    reader.onload = () => { try { const d = JSON.parse(reader.result); if (d.chores) { api.importData(d); alert('Backup restored.') } else alert('Not a valid backup file.') } catch { alert('Could not read that file.') } }
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(reader.result)
+        if (!d.chores) { alert('Not a valid backup file.'); return }
+        if (syncOn) { setPendingImport(d) }          // sync on → ask which copy wins
+        else { applyBackup(d); alert('Backup restored.') }
+      } catch { alert('Could not read that file.') }
+    }
     reader.readAsText(file); e.target.value = ''
+  }
+  // "Server wins" (default): discard the backup, keep the synced copy.
+  const importKeepServer = async () => {
+    const r = await syncPull(state.settings.syncCode)
+    if (r.ok && r.state) { api.mergeState(r.state); setPendingImport(null) }
+    else if (r.ok && r.state === null) { applyBackup(pendingImport); setPendingImport(null); alert('Nothing on the server yet — restored the backup instead.') }
+    else { alert(`Couldn't reach the server (${r.reason || 'error'}).`); setPendingImport(null) }
+  }
+  // "Local wins": make this backup the source of truth; it pushes up to the server on the next sync.
+  const importUseBackup = () => {
+    if (!confirm('Overwrite the synced copy and every device with this backup?')) return
+    applyBackup(pendingImport); setPendingImport(null)
+    alert('Backup restored — it will sync to your other devices.')
   }
 
   const askNotify = async () => {
@@ -189,6 +216,17 @@ export default function Settings() {
 
       <p className="text-center text-[11px] text-faint pt-1">Last Done · offline PWA · v0.2</p>
 
+      {pendingImport && (
+        <Sheet open onClose={() => setPendingImport(null)} title="Restore backup">
+          <p className="text-[13px] text-muted mb-1">This backup has {pendingImport.chores?.length || 0} chores. Your devices are synced (code {state.settings.syncCode}).</p>
+          <p className="text-[13px] text-faint mb-4">Pick which copy becomes the source of truth for all your devices.</p>
+          <div className="space-y-2">
+            <button onClick={importKeepServer} className="w-full py-2.5 rounded-lg font-medium text-[14px] text-white bg-accent">Keep synced copy (recommended)</button>
+            <button onClick={importUseBackup} className="w-full py-2.5 rounded-lg font-medium text-[14px] text-red-500 border border-line hover:border-red-500/40">Use this backup — overwrites all devices</button>
+          </div>
+          <p className="text-[11px] text-faint mt-3 leading-relaxed">“Keep synced copy” protects your other devices from an accidental restore. Choose “Use this backup” only when this file is the good copy you want everywhere.</p>
+        </Sheet>
+      )}
       {catEdit && <CategoryEditor cat={catEdit} onClose={() => setCatEdit(null)} />}
       {personEdit && <PersonEditor person={personEdit} onClose={() => setPersonEdit(null)} />}
     </div>
